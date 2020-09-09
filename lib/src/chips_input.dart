@@ -4,13 +4,16 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'chip_item.dart';
 import 'suggestions_box_controller.dart';
 import 'text_cursor.dart';
+import 'util.dart';
 
-typedef ChipsInputSuggestions<T> = FutureOr<List<T>> Function(String query);
-typedef ChipSelected<T> = void Function(T data, bool selected);
-typedef ChipsBuilder<T> = Widget Function(
-    BuildContext context, ChipsInputState<T> state, T data);
+typedef ChipsInputSuggestions<ChipItem> = FutureOr<List<ChipItem>> Function(
+    String query);
+typedef ChipSelected<ChipItem> = void Function(ChipItem data, bool selected);
+typedef ChipsBuilder<ChipItem> = Widget Function(
+    BuildContext context, ChipsInputState state, ChipItem data);
 
 const kObjectReplacementChar = 0xFFFD;
 
@@ -26,44 +29,45 @@ extension on TextEditingValue {
   int get replacementCharactersCount => replacementCharacters.length;
 }
 
-class ChipsInput<T> extends StatefulWidget {
-  ChipsInput({
-    Key key,
-    this.initialValue = const [],
-    this.decoration = const InputDecoration(),
-    this.enabled = true,
-    @required this.chipBuilder,
-    @required this.suggestionBuilder,
-    @required this.findSuggestions,
-    @required this.onChanged,
-    this.onChipTapped,
-    this.maxChips,
-    this.textStyle,
-    this.suggestionsBoxMaxHeight,
-    this.inputType = TextInputType.text,
-    this.textOverflow = TextOverflow.clip,
-    this.obscureText = false,
-    this.autocorrect = true,
-    this.actionLabel,
-    this.inputAction = TextInputAction.done,
-    this.keyboardAppearance = Brightness.light,
-    this.textCapitalization = TextCapitalization.none,
-    this.autofocus = false,
-    this.allowChipEditing = false,
-    this.focusNode,
-  })  : assert(maxChips == null || initialValue.length <= maxChips),
+class ChipsInput extends StatefulWidget {
+  ChipsInput(
+      {Key key,
+      this.initialValue = const [],
+      this.decoration = const InputDecoration(),
+      this.enabled = true,
+      @required this.chipBuilder,
+      @required this.suggestionBuilder,
+      @required this.findSuggestions,
+      @required this.onChanged,
+      this.onChipTapped,
+      this.maxChips,
+      this.textStyle,
+      this.suggestionsBoxMaxHeight,
+      this.inputType = TextInputType.text,
+      this.textOverflow = TextOverflow.clip,
+      this.obscureText = false,
+      this.autocorrect = true,
+      this.actionLabel,
+      this.inputAction = TextInputAction.done,
+      this.keyboardAppearance = Brightness.light,
+      this.textCapitalization = TextCapitalization.none,
+      this.autofocus = false,
+      this.allowChipEditing = false,
+      this.focusNode,
+      this.suffixNewChip})
+      : assert(maxChips == null || initialValue.length <= maxChips),
         super(key: key);
 
   final InputDecoration decoration;
   final TextStyle textStyle;
   final bool enabled;
   final ChipsInputSuggestions findSuggestions;
-  final ValueChanged<List<T>> onChanged;
+  final ValueChanged<List<ChipItem>> onChanged;
   @Deprecated("Will be removed in the next major version")
-  final ValueChanged<T> onChipTapped;
-  final ChipsBuilder<T> chipBuilder;
-  final ChipsBuilder<T> suggestionBuilder;
-  final List<T> initialValue;
+  final ValueChanged<ChipItem> onChipTapped;
+  final ChipsBuilder<ChipItem> chipBuilder;
+  final ChipsBuilder<ChipItem> suggestionBuilder;
+  final List<ChipItem> initialValue;
   final int maxChips;
   final double suggestionsBoxMaxHeight;
   final TextInputType inputType;
@@ -76,20 +80,20 @@ class ChipsInput<T> extends StatefulWidget {
   final bool autofocus;
   final bool allowChipEditing;
   final FocusNode focusNode;
+  final String suffixNewChip;
 
   // final Color cursorColor;
 
   final TextCapitalization textCapitalization;
 
   @override
-  ChipsInputState<T> createState() => ChipsInputState<T>();
+  ChipsInputState createState() => ChipsInputState();
 }
 
-class ChipsInputState<T> extends State<ChipsInput<T>>
-    implements TextInputClient {
-  Set<T> _chips = Set<T>();
-  List<T> _suggestions;
-  StreamController<List<T>> _suggestionsStreamController;
+class ChipsInputState extends State<ChipsInput> implements TextInputClient {
+  Set<ChipItem> _chips = Set<ChipItem>();
+  List<ChipItem> _suggestions;
+  StreamController<List<ChipItem>> _suggestionsStreamController;
   int _searchId = 0;
   TextEditingValue _value = TextEditingValue();
   // TextEditingValue _receivedRemoteTextEditingValue;
@@ -97,7 +101,7 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
   SuggestionsBoxController _suggestionsBoxController;
   LayerLink _layerLink = LayerLink();
   Size size;
-  Map<T, String> _enteredTexts = {};
+  Map<ChipItem, String> _enteredTexts = {};
 
   TextInputConfiguration get textInputConfiguration => TextInputConfiguration(
         inputType: widget.inputType,
@@ -129,7 +133,7 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
     _chips.addAll(widget.initialValue);
     // _focusAttachment = _effectiveFocusNode.attach(context);
     _suggestionsBoxController = SuggestionsBoxController(context);
-    _suggestionsStreamController = StreamController<List<T>>.broadcast();
+    _suggestionsStreamController = StreamController<List<ChipItem>>.broadcast();
     _effectiveFocusNode.addListener(_handleFocusChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _initOverlayEntry();
@@ -152,6 +156,11 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
     } else {
       _closeInputConnectionIfNeeded();
       _suggestionsBoxController.close();
+
+      var enteredText = _value.normalCharactersText ?? '';
+      if (enteredText.isNotEmpty) {
+        selectNewChip(enteredText);
+      }
     }
     if (mounted) {
       setState(() {
@@ -229,7 +238,7 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
     );
   }
 
-  void selectSuggestion(T data) {
+  void selectSuggestion(ChipItem data) {
     if (!_hasReachedMaxChips) {
       _chips.add(data);
       if (widget.allowChipEditing) {
@@ -247,7 +256,27 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
     widget.onChanged(_chips.toList(growable: false));
   }
 
-  void deleteChip(T data) {
+  void selectNewChip(String data) {
+    if (!_hasReachedMaxChips) {
+      var _newChip = ChipItem.fromString(
+          data.contains('@') ? data : data + (widget.suffixNewChip ?? ''));
+      _chips.add(_newChip);
+      if (widget.allowChipEditing) {
+        var enteredText = _value.normalCharactersText ?? '';
+        if (enteredText.isNotEmpty) _enteredTexts[_newChip] = enteredText;
+      }
+      _updateTextInputState(replaceText: true);
+
+      _suggestions = null;
+      _suggestionsStreamController.add(_suggestions);
+      if (widget.maxChips == _chips.length) _suggestionsBoxController.close();
+    } else {
+      _suggestionsBoxController.close();
+    }
+    widget.onChanged(_chips.toList(growable: false));
+  }
+
+  void deleteChip(ChipItem data) {
     if (widget.enabled) {
       _chips.remove(data);
       if (_enteredTexts.containsKey(data)) _enteredTexts.remove(data);
@@ -273,12 +302,23 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
 
   void _onSearchChanged(String value) async {
     final localId = ++_searchId;
-    final results = await widget.findSuggestions(value);
-    if (_searchId == localId && mounted) {
-      _suggestions =
-          results.where((r) => !_chips.contains(r)).toList(growable: false);
+    if (value.trimLeft().contains(' ')) {
+      if (_searchId == localId && mounted) {
+        selectNewChip(value.trim());
+      }
+    } else {
+      final results = parseSuggestions(await widget.findSuggestions(value));
+      if (_searchId == localId && mounted) {
+        //_suggestions =
+        //    results.where((r) => !_chips.contains(r)).toList(growable: false);
+        _suggestions = results.where((r) {
+          return _chips.singleWhere((element) => element.chip == r.chip,
+                  orElse: () => null) ==
+              null;
+        }).toList(growable: false);
+      }
+      _suggestionsStreamController.add(_suggestions);
     }
-    _suggestionsStreamController.add(_suggestions);
   }
 
   void _closeInputConnectionIfNeeded() {
@@ -317,7 +357,7 @@ class ChipsInputState<T> extends State<ChipsInput<T>>
   }
 
   void _updateTextInputState({replaceText = false, putText = ''}) {
-    final updatedText =
+    String updatedText =
         String.fromCharCodes(_chips.map((_) => kObjectReplacementChar)) +
             "${replaceText ? '' : _value.normalCharactersText}" +
             putText;
