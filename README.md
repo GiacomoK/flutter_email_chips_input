@@ -1,4 +1,4 @@
-# flutter_email_chips_input
+# flutter_chips_input
 
 Flutter library for building input fields with InputChips as input options.
 
