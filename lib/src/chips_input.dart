@@ -286,9 +286,11 @@ class ChipsInputState extends State<ChipsInput> implements TextInputClient {
   }
 
   void editChip(ChipItem data) {
-    var val = data.value;
-    deleteChip(data);
-    _updateTextInputState(putText: val);
+    if (data.chip == null) {
+      var val = data.value;
+      deleteChip(data);
+      _updateTextInputState(putText: val);
+    }
   }
 
   void _openInputConnection() {
