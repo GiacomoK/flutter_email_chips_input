@@ -310,9 +310,9 @@ class ChipsInputState extends State<ChipsInput> implements TextInputClient {
 
   void _onSearchChanged(String value) async {
     final localId = ++_searchId;
-    if (value.trimLeft().contains(' ')) {
+    if (value.trimLeft().contains(' ') || value.trimLeft().contains(';') || value.trimLeft().contains(',')) {
       if (_searchId == localId && mounted) {
-        selectNewChip(value.trim());
+        selectNewChip(value.trim().replaceAll(';', '').replaceAll(',', ''));
       }
     } else {
       final results = parseSuggestions(await widget.findSuggestions(value));
