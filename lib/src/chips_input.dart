@@ -285,9 +285,14 @@ class ChipsInputState extends State<ChipsInput> implements TextInputClient {
     }
   }
 
-  void editChip(ChipItem data) {
+  void editChip(ChipItem data, {value: ''}) {
+    var val = '';
     if (data.chip == null) {
-      var val = data.value;
+      val = data.value;
+    } else {
+      val = value;
+    }
+    if (val.isNotEmpty) {
       deleteChip(data);
       _updateTextInputState(putText: val);
     }
@@ -310,7 +315,9 @@ class ChipsInputState extends State<ChipsInput> implements TextInputClient {
 
   void _onSearchChanged(String value) async {
     final localId = ++_searchId;
-    if (value.trimLeft().contains(' ') || value.trimLeft().contains(';') || value.trimLeft().contains(',')) {
+    if (value.trimLeft().contains(' ') ||
+        value.trimLeft().contains(';') ||
+        value.trimLeft().contains(',')) {
       if (_searchId == localId && mounted) {
         selectNewChip(value.trim().replaceAll(';', '').replaceAll(',', ''));
       }
