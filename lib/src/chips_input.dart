@@ -387,7 +387,9 @@ class ChipsInputState extends State<ChipsInput> implements TextInputClient {
     if (_textInputConnection == null) {
       _textInputConnection = TextInput.attach(this, textInputConfiguration);
     }
-    _textInputConnection.setEditingState(_value);
+    try {
+      _textInputConnection.setEditingState(_value);
+    } catch (error) { }
     // _closeInputConnectionIfNeeded(false);
   }
 
